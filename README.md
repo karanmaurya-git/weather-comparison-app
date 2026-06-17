@@ -11,15 +11,17 @@ A React app that compares 5-day weather forecasts for up to 5 cities simultaneou
 
 ## Project Structure
 ```
-src/
-  App.jsx                  # Main app component
-  index.js                 # Entry point
-  index.css                # Global styles
-  weatherApi.js            # Anthropic API integration
-  components/
-    CityCard.jsx           # Individual city weather card
-    ForecastChart.jsx      # Chart.js line chart component
-    SearchBar.jsx          # City search input
+weather-app/
+├── src/
+│   ├── App.jsx              # Main app component
+│   ├── index.js             # Entry point
+│   ├── index.css            # Global styles
+│   ├── weatherApi.js        # API integration
+│   │
+│   └── components/
+│       ├── CityCard.jsx         # Individual city weather card
+│       ├── ForecastChart.jsx    # Chart.js line chart component
+│       └── SearchBar.jsx        # City search input
 ```
 
 ## Setup
