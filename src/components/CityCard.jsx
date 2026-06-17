@@ -10,7 +10,21 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
 
 const COLORS = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#BA7517'];
 
-export default function CityCard({ city, index, onRemove, darkMode }) {
+// Animated weather icons using CSS
+const ANIMATED_ICONS = {
+  '☀️': { emoji: '☀️', animation: 'spin 8s linear infinite' },
+  '🌤️': { emoji: '🌤️', animation: 'float 3s ease-in-out infinite' },
+  '☁️': { emoji: '☁️', animation: 'float 4s ease-in-out infinite' },
+  '🌧️': { emoji: '🌧️', animation: 'shake 1.5s ease-in-out infinite' },
+  '⛈️': { emoji: '⛈️', animation: 'shake 1s ease-in-out infinite' },
+  '❄️': { emoji: '❄️', animation: 'spin 6s linear infinite' },
+  '🌫️': { emoji: '🌫️', animation: 'float 5s ease-in-out infinite' },
+};
+
+function toF(c) { return Math.round((c * 9) / 5 + 32); }
+function convertTemp(temp, unit) { return unit === 'F' ? toF(temp) : Math.round(temp); }
+
+export default function CityCard({ city, index, onRemove, darkMode, unit = 'C' }) {
   const [showHourly, setShowHourly] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const color = COLORS[index % COLORS.length];
@@ -18,11 +32,13 @@ export default function CityCard({ city, index, onRemove, darkMode }) {
 
   const hasAlerts = city.alerts?.length > 0;
   const hasHourly = city.hourly?.length > 0;
+  const iconKey = city.current?.icon || '🌤️';
+  const animatedIcon = ANIMATED_ICONS[iconKey] || { emoji: iconKey, animation: 'float 3s ease-in-out infinite' };
 
   const hourlyChartData = {
     labels: (city.hourly || []).map((h) => h.time),
     datasets: [{
-      data: (city.hourly || []).map((h) => h.temp),
+      data: (city.hourly || []).map((h) => unit === 'F' ? toF(h.temp) : h.temp),
       borderColor: color,
       backgroundColor: color + '22',
       fill: true,
@@ -35,14 +51,17 @@ export default function CityCard({ city, index, onRemove, darkMode }) {
   const hourlyChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: {
-      backgroundColor: darkMode ? '#1a1a1a' : '#fff',
-      titleColor: darkMode ? '#ccc' : '#333',
-      bodyColor: darkMode ? '#aaa' : '#555',
-      borderColor: darkMode ? '#2a2a2a' : '#e0e0e0',
-      borderWidth: 1,
-      callbacks: { label: (ctx) => ` ${ctx.parsed.y}°C` },
-    }},
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: darkMode ? '#1a1a1a' : '#fff',
+        titleColor: darkMode ? '#ccc' : '#333',
+        bodyColor: darkMode ? '#aaa' : '#555',
+        borderColor: darkMode ? '#2a2a2a' : '#e0e0e0',
+        borderWidth: 1,
+        callbacks: { label: (ctx) => ` ${ctx.parsed.y}°${unit}` },
+      },
+    },
     scales: {
       y: {
         ticks: { callback: (v) => v + '°', font: { size: 10 }, color: darkMode ? '#555' : '#999' },
@@ -56,94 +75,101 @@ export default function CityCard({ city, index, onRemove, darkMode }) {
   };
 
   return (
-    <div style={s.card}>
-      {/* Header */}
-      <div style={s.cardHeader}>
-        <div>
-          <div style={{ ...s.cityName, color }}>{city.name}</div>
-          <div style={s.countryLabel}>{city.country}</div>
+    <>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+      `}</style>
+      <div style={s.card}>
+        {/* Header */}
+        <div style={s.cardHeader}>
+          <div>
+            <div style={{ ...s.cityName, color }}>{city.name}</div>
+            <div style={s.countryLabel}>{city.country}</div>
+          </div>
+          <div style={s.headerRight}>
+            <span style={{ fontSize: 28, display: 'inline-block', animation: animatedIcon.animation }}>
+              {animatedIcon.emoji}
+            </span>
+            <button onClick={onRemove} style={s.removeBtn} aria-label={`Remove ${city.name}`}>×</button>
+          </div>
         </div>
-        <div style={s.headerRight}>
-          <span style={s.weatherIcon}>{city.current?.icon}</span>
-          <button onClick={onRemove} style={s.removeBtn} aria-label={`Remove ${city.name}`}>×</button>
-        </div>
-      </div>
 
-      {/* Weather alert banner */}
-      {hasAlerts && (
-        <div style={s.alertBanner} onClick={() => setShowAlerts((p) => !p)}>
-          <span>⚠️ {city.alerts.length} weather alert{city.alerts.length > 1 ? 's' : ''}</span>
-          <span style={s.alertToggle}>{showAlerts ? '▲' : '▼'}</span>
-        </div>
-      )}
+        {/* Weather alert banner */}
+        {hasAlerts && (
+          <div style={s.alertBanner} onClick={() => setShowAlerts((p) => !p)}>
+            <span>⚠️ {city.alerts.length} weather alert{city.alerts.length > 1 ? 's' : ''}</span>
+            <span style={s.alertToggle}>{showAlerts ? '▲' : '▼'}</span>
+          </div>
+        )}
+        {hasAlerts && showAlerts && (
+          <div style={s.alertDetails}>
+            {city.alerts.map((a, i) => (
+              <div key={i} style={s.alertItem}>
+                <div style={s.alertEvent}>{a.event}</div>
+                <div style={s.alertMeta}>{a.start} → {a.end}</div>
+                {a.sender && <div style={s.alertSender}>📡 {a.sender}</div>}
+                <div style={s.alertDesc}>{a.description?.slice(0, 160)}{a.description?.length > 160 ? '…' : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Alert details */}
-      {hasAlerts && showAlerts && (
-        <div style={s.alertDetails}>
-          {city.alerts.map((a, i) => (
-            <div key={i} style={s.alertItem}>
-              <div style={s.alertEvent}>{a.event}</div>
-              <div style={s.alertMeta}>{a.start} → {a.end}</div>
-              {a.sender && <div style={s.alertSender}>📡 {a.sender}</div>}
-              <div style={s.alertDesc}>{a.description?.slice(0, 160)}{a.description?.length > 160 ? '…' : ''}</div>
+        {/* Current temp */}
+        <div style={s.currentTemp}>{convertTemp(city.current?.temp ?? 0, unit)}°{unit}</div>
+        <div style={s.currentDesc}>{city.current?.desc}</div>
+
+        {/* Stats */}
+        <div style={s.statsRow}>
+          <span style={s.stat}>💧 {city.current?.humidity ?? '--'}%</span>
+          <span style={s.stat}>💨 {city.current?.wind ?? '--'} km/h</span>
+        </div>
+
+        <hr style={s.divider} />
+
+        {/* 5-day forecast */}
+        <div style={s.forecastList}>
+          {(city.forecast || []).map((d, i) => (
+            <div key={i} style={s.forecastRow}>
+              <span style={s.forecastDay}>{d.day}</span>
+              <span style={s.forecastDate}>{d.date}</span>
+              <span style={s.forecastIcon}>{d.icon}</span>
+              <div style={s.forecastTemps}>
+                <span style={s.tempHigh}>{convertTemp(d.high, unit)}°</span>
+                <span style={s.tempLow}>{convertTemp(d.low, unit)}°</span>
+              </div>
             </div>
           ))}
         </div>
-      )}
 
-      {/* Current temp */}
-      <div style={s.currentTemp}>{Math.round(city.current?.temp ?? 0)}°C</div>
-      <div style={s.currentDesc}>{city.current?.desc}</div>
-
-      {/* Stats row */}
-      <div style={s.statsRow}>
-        <span style={s.stat}>💧 {city.current?.humidity ?? '--'}%</span>
-        <span style={s.stat}>💨 {city.current?.wind ?? '--'} km/h</span>
-      </div>
-
-      <hr style={s.divider} />
-
-      {/* 5-day forecast */}
-      <div style={s.forecastList}>
-        {(city.forecast || []).map((d, i) => (
-          <div key={i} style={s.forecastRow}>
-            <span style={s.forecastDay}>{d.day}</span>
-            <span style={s.forecastDate}>{d.date}</span>
-            <span style={s.forecastIcon}>{d.icon}</span>
-            <div style={s.forecastTemps}>
-              <span style={s.tempHigh}>{Math.round(d.high)}°</span>
-              <span style={s.tempLow}>{Math.round(d.low)}°</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Hourly toggle */}
-      {hasHourly && (
-        <>
-          <hr style={s.divider} />
-          <button style={{ ...s.hourlyToggle, color }} onClick={() => setShowHourly((p) => !p)}>
-            {showHourly ? '▲ Hide hourly' : '▼ 24h forecast'}
-          </button>
-          {showHourly && (
-            <div style={s.hourlyChart}>
-              <div style={{ height: 120 }}>
-                <Line data={hourlyChartData} options={hourlyChartOptions} />
+        {/* Hourly toggle */}
+        {hasHourly && (
+          <>
+            <hr style={s.divider} />
+            <button style={{ ...s.hourlyToggle, color }} onClick={() => setShowHourly((p) => !p)}>
+              {showHourly ? '▲ Hide hourly' : '▼ 24h forecast'}
+            </button>
+            {showHourly && (
+              <div style={s.hourlyChart}>
+                <div style={{ height: 120 }}>
+                  <Line data={hourlyChartData} options={hourlyChartOptions} />
+                </div>
+                <div style={s.hourlyStats}>
+                  {(city.hourly || []).slice(0, 4).map((h, i) => (
+                    <div key={i} style={s.hourlySlot}>
+                      <div style={s.hourlyTime}>{h.time}</div>
+                      <div style={s.hourlyIcon}>{h.icon}</div>
+                      <div style={s.hourlyTemp}>{convertTemp(h.temp, unit)}°</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div style={s.hourlyStats}>
-                {(city.hourly || []).slice(0, 4).map((h, i) => (
-                  <div key={i} style={s.hourlySlot}>
-                    <div style={s.hourlyTime}>{h.time}</div>
-                    <div style={s.hourlyIcon}>{h.icon}</div>
-                    <div style={s.hourlyTemp}>{h.temp}°</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -152,15 +178,13 @@ function getStyles(dark) {
     card: {
       background: dark ? '#111111' : '#fff',
       border: dark ? '1px solid #2a2a2a' : '1px solid #e8eaf0',
-      borderRadius: 16,
-      padding: '1.25rem',
+      borderRadius: 16, padding: '1.25rem',
       transition: 'background 0.3s ease',
     },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
     cityName: { fontSize: 16, fontWeight: 600 },
     countryLabel: { fontSize: 12, color: dark ? '#555' : '#888', marginTop: 2 },
     headerRight: { display: 'flex', alignItems: 'center', gap: 8 },
-    weatherIcon: { fontSize: 28 },
     removeBtn: {
       background: 'none', border: dark ? '1px solid #333' : '1px solid #e0e0e0',
       borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center',

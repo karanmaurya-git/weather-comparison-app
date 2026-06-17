@@ -1,4 +1,3 @@
-// App.jsx
 import React, { useState, useEffect } from 'react';
 import SearchBar from './components/SearchBar';
 import CityCard from './components/CityCard';
@@ -11,25 +10,23 @@ export default function App() {
   const [cities, setCities] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('weather_dark_mode') === 'true';
-  });
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('weather_dark_mode') === 'true');
+  const [unit, setUnit] = useState(() => localStorage.getItem('weather_unit') || 'C');
   const [locating, setLocating] = useState(false);
+  const [dragIndex, setDragIndex] = useState(null);
 
-  // --- Persist dark mode preference ---
   useEffect(() => {
     localStorage.setItem('weather_dark_mode', darkMode);
     const bg = darkMode ? '#000000' : '';
     document.documentElement.style.background = bg;
     document.body.style.background = bg;
     document.body.style.margin = '0';
-    return () => {
-      document.documentElement.style.background = '';
-      document.body.style.background = '';
-    };
   }, [darkMode]);
 
-  // --- Restore cities from localStorage on mount ---
+  useEffect(() => {
+    localStorage.setItem('weather_unit', unit);
+  }, [unit]);
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -40,12 +37,10 @@ export default function App() {
     }
   }, []);
 
-  // --- Save cities whenever they change ---
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cities));
   }, [cities]);
 
-  // --- Auto-detect location on first load (skip if saved cities exist) ---
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     let hasSaved = false;
@@ -70,7 +65,7 @@ export default function App() {
       },
       () => setLocating(false)
     );
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line
 
   const handleAddCity = async (name) => {
     if (cities.length >= 5) { setError('Maximum 5 cities allowed.'); return; }
@@ -92,6 +87,18 @@ export default function App() {
   const handleRemove = (index) => setCities((prev) => prev.filter((_, i) => i !== index));
   const handleClearAll = () => { setCities([]); setError(''); };
 
+  const handleDragStart = (index) => setDragIndex(index);
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+    const reordered = [...cities];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(index, 0, moved);
+    setCities(reordered);
+    setDragIndex(index);
+  };
+  const handleDragEnd = () => setDragIndex(null);
+
   const s = getStyles(darkMode);
 
   return (
@@ -103,9 +110,21 @@ export default function App() {
               <h1 style={s.title}>🌤 Weather Comparison</h1>
               <p style={s.subtitle}>Compare 5-day forecasts for up to 5 cities side by side</p>
             </div>
-            <button style={s.themeToggle} onClick={() => setDarkMode((p) => !p)}>
-              {darkMode ? '☀️ Light' : '🌙 Dark'}
-            </button>
+            <div style={s.controls}>
+              <div style={s.unitToggle}>
+                <button
+                  style={{ ...s.unitBtn, ...(unit === 'C' ? s.unitBtnActive : {}) }}
+                  onClick={() => setUnit('C')}
+                >°C</button>
+                <button
+                  style={{ ...s.unitBtn, ...(unit === 'F' ? s.unitBtnActive : {}) }}
+                  onClick={() => setUnit('F')}
+                >°F</button>
+              </div>
+              <button style={s.themeToggle} onClick={() => setDarkMode((p) => !p)}>
+                {darkMode ? '☀️ Light' : '🌙 Dark'}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -124,8 +143,8 @@ export default function App() {
         )}
 
         {locating && <div style={s.loadingBox}>📍 Detecting your location...</div>}
+        {loading && <div style={s.loadingBox}>⏳ Fetching weather data...</div>}
         {error && <div style={s.errorBox} role="alert">⚠️ {error}</div>}
-        {loading && <div style={s.loadingBox}>⏳ Fetching forecast data...</div>}
 
         {!loading && !locating && cities.length === 0 && !error && (
           <div style={s.emptyState}>
@@ -138,12 +157,25 @@ export default function App() {
         {cities.length > 0 && (
           <div style={s.grid}>
             {cities.map((city, i) => (
-              <CityCard key={i} city={city} index={i} onRemove={() => handleRemove(i)} darkMode={darkMode} />
+              <div
+                key={i}
+                draggable
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDragEnd={handleDragEnd}
+                style={{
+                  ...s.draggable,
+                  opacity: dragIndex === i ? 0.5 : 1,
+                  cursor: 'grab',
+                }}
+              >
+                <CityCard city={city} index={i} onRemove={() => handleRemove(i)} darkMode={darkMode} unit={unit} />
+              </div>
             ))}
           </div>
         )}
 
-        {cities.length > 0 && <ForecastChart cities={cities} darkMode={darkMode} />}
+        {cities.length > 0 && <ForecastChart cities={cities} darkMode={darkMode} unit={unit} />}
       </div>
     </div>
   );
@@ -162,6 +194,27 @@ function getStyles(dark) {
     titleRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 },
     title: { fontSize: 28, fontWeight: 700, color: dark ? '#e8eaf6' : '#1a1a2e', marginBottom: 6 },
     subtitle: { fontSize: 15, color: dark ? '#9e9eb8' : '#666' },
+    controls: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+    unitToggle: {
+      display: 'flex',
+      border: dark ? '1px solid #2a2a2a' : '1px solid #dde3ee',
+      borderRadius: 20,
+      overflow: 'hidden',
+    },
+    unitBtn: {
+      background: 'none',
+      border: 'none',
+      padding: '6px 14px',
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: 'pointer',
+      color: dark ? '#666' : '#aaa',
+      transition: 'all 0.2s',
+    },
+    unitBtnActive: {
+      background: '#378ADD',
+      color: '#fff',
+    },
     themeToggle: {
       background: dark ? '#1a1a1a' : '#fff',
       border: dark ? '1px solid #2a2a2a' : '1px solid #dde3ee',
@@ -190,5 +243,6 @@ function getStyles(dark) {
     emptyText: { fontSize: 16, fontWeight: 600, marginBottom: 6, color: dark ? '#666' : '#888' },
     emptyHint: { fontSize: 14, color: dark ? '#444' : '#aaa' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginBottom: 8 },
+    draggable: { transition: 'opacity 0.2s' },
   };
 }
