@@ -83,6 +83,7 @@ A React-based weather application that allows users to compare real-time weather
 
 ## 📁 Project Structure
 
+```text
 weather-app/
 ├── public/
 ├── src/
